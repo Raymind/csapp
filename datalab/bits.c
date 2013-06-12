@@ -237,8 +237,8 @@ int isGreater(int x, int y) {
   int v1 = x & ny;
   int v2 = x ^ ny;
   int v3 = x + ny;
-  int v4 = (v1 | (v2 & v3)) >> 31;
-  return !v4;
+  int v4 = (v2 & v3) | v1;
+  return !(v4 >> 31);
 }
 /* 
  * absVal - absolute value of x
