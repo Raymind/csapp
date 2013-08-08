@@ -23,6 +23,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <assert.h>
+#include <sys/types.h>
+
+
 
 
 /* Default file permissions are DEF_MODE & ~DEF_UMASK */

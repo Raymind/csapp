@@ -1,8 +1,6 @@
 #ifndef _PROXYLAB_REQS_H_
 #define _PROXYLAB_REQS_H_
 
-#include "assert.h"
-
 #define HTTP_PORT 80
 #define HTTP_PORT_SSL 443
 #define IP_LENGTH		48

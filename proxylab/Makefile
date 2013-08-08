@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -Wall -Werror
 LDFLAGS = -lpthread
-SOURCES = csapp.c child.c hashmap.c reqs.c network.c proxy.c
+SOURCES = csapp.c child.c hashmap.c reqs.c network.c buffer.c conns.c text.c proxy.c
 OBJECTS = $(SOURCES:.c=.o)
 EXECUTABLE = proxy
 

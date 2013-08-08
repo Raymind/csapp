@@ -1,7 +1,6 @@
 #include "child.h"
 #include "csapp.h"
 #include "proxy.h"
-#include "assert.h"
 
 static int listenfd;
 static socklen_t addrlen;

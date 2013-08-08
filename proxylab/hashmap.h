@@ -1,9 +1,6 @@
 #ifndef _PROXYLAB_HASHMAP_H_
 #define _PROXYLAB_HASHMAP_H_
 
-#include "assert.h"
-#include "sys/types.h"
-
 typedef struct hashmap_s *hashmap_t;
 typedef int hashmap_iter;
 

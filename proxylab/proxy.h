@@ -1,7 +1,8 @@
 #ifndef _PROXYLAB_PROXY_H_
 #define _PROXYLAB_PROXY_H_
 
-#define MAXBUFFSIZE     ((size_t)(1024 * 96))
+#define MAX_CACHE_SIZE 1049000
+#define MAX_OBJECT_SIZE 102400
 
 extern unsigned int QUIT;
 
