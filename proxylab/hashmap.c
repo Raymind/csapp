@@ -1,10 +1,11 @@
 #include "hashmap.h"
-#include "csapp.h"
 
 struct hashentry_s {
     char *key;
     void *data;
     size_t len;
+    long timestamp;
+    int count;
 
     struct hashentry_s *prev, *next;
 };
@@ -148,6 +149,8 @@ hashmap_insert (hashmap_t map, const char *key, const void *data, size_t len)
     ptr->key = key_copy;
     ptr->data = data_copy;
     ptr->len = len;
+    ptr->timestamp = (long)time(NULL);
+    ptr->count = 1;
     ptr->next = NULL;
     ptr->prev = map->buckets[hash].tail;
     if (map->buckets[hash].tail)
@@ -204,6 +207,8 @@ hashmap_iter hashmap_find (hashmap_t map, const char *key)
 
         while (ptr) {
             if (strcasecmp (ptr->key, key) == 0) {
+                ptr -> timestamp = (long)time(NULL);
+                ptr -> count = ptr -> count + 1;
                 return iter;
             }
 
@@ -237,6 +242,8 @@ hashmap_return_entry (hashmap_t map, hashmap_iter iter, char **key, void **data)
             if (count == iter) {
                 *key = ptr->key;
                 *data = ptr->data;
+                ptr -> timestamp = (long)time(NULL);
+                ptr -> count = ptr -> count + 1;
                 return ptr->len;
             }
 
@@ -264,8 +271,11 @@ ssize_t hashmap_search (hashmap_t map, const char *key)
     ptr = map->buckets[hash].head;
 
     while (ptr) {
-        if (strcasecmp (ptr->key, key) == 0)
+        if (strcasecmp (ptr->key, key) == 0){
+            ptr -> timestamp = (long)time(NULL);
+            ptr -> count = ptr -> count + 1;
             ++count;
+        }
         ptr = ptr->next;
     }
 
@@ -288,6 +298,8 @@ ssize_t hashmap_entry_by_key (hashmap_t map, const char *key, void **data)
 
     while (ptr) {
         if (strcasecmp (ptr->key, key) == 0) {
+            ptr -> timestamp = (long)time(NULL);
+            ptr -> count = ptr -> count + 1;
             *data = ptr->data;
             return ptr->len;
         }
@@ -343,3 +355,47 @@ ssize_t hashmap_remove (hashmap_t map, const char *key)
     return deleted;
 }
 
+ssize_t hashmap_remove_lru(struct hashmap_s *map)
+{
+    ssize_t ret;
+    unsigned int i;
+    struct hashentry_s *ptr, *min_ptr, *next;
+    long min_time = -1;
+    unsigned int min_hash;
+
+    if (!map)
+        return -EINVAL;
+    
+    for (i = 0; i != map->size; i++) {
+        ptr = map->buckets[i].head;
+
+        while (ptr) {
+            if(min_time < 0 || ptr -> timestamp < min_time){
+                min_time = ptr -> timestamp;
+                min_hash = i;
+                min_ptr = ptr;
+            }
+            ptr = ptr->next;
+        }
+    }
+
+    if(min_time < 0) return 0;
+
+    ret = min_ptr -> len;
+    next = min_ptr -> next;
+    if (min_ptr->prev)
+        min_ptr->prev->next = min_ptr->next;
+    if (min_ptr->next)
+        min_ptr->next->prev = min_ptr->prev;
+
+    if (map->buckets[min_hash].head == min_ptr)
+        map->buckets[min_hash].head = min_ptr->next;
+    if (map->buckets[min_hash].tail == min_ptr)
+        map->buckets[min_hash].tail = min_ptr->prev;
+
+    Free (min_ptr->key);
+    Free (min_ptr->data);
+    Free (min_ptr);
+    
+    return ret;
+}

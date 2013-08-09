@@ -25,8 +25,10 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <stdarg.h>
+#include <signal.h>
 
-
+#include "MITLogModule.h"
 
 
 /* Default file permissions are DEF_MODE & ~DEF_UMASK */

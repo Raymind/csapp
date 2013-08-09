@@ -1,6 +1,8 @@
 #ifndef _PROXYLAB_HASHMAP_H_
 #define _PROXYLAB_HASHMAP_H_
 
+#include "csapp.h"
+
 typedef struct hashmap_s *hashmap_t;
 typedef int hashmap_iter;
 
@@ -17,5 +19,5 @@ extern ssize_t hashmap_entry_by_key (hashmap_t map, const char *key,
                                      void **data);
 extern ssize_t hashmap_search (hashmap_t map, const char *key);
 extern ssize_t hashmap_remove (hashmap_t map, const char *key);
-
+extern ssize_t hashmap_remove_lru(struct hashmap_s *map);
 #endif

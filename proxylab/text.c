@@ -4,9 +4,6 @@ ssize_t chomp (char *buffer, size_t length)
 {
     size_t chars;
 
-    assert (buffer != NULL);
-    assert (length > 0);
-
     if (buffer == NULL)
         return -EFAULT;
     if (length < 1)

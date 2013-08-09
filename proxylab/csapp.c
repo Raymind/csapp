@@ -8,26 +8,26 @@
 /* $begin unixerror */
 void unix_error(char *msg) /* unix-style error */
 {
-    fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+    MITLogWrite(MITLOG_LEVEL_ERROR, "%s: %s", msg, strerror(errno));
     exit(0);
 }
 /* $end unixerror */
 
 void posix_error(int code, char *msg) /* posix-style error */
 {
-    fprintf(stderr, "%s: %s\n", msg, strerror(code));
+    MITLogWrite(MITLOG_LEVEL_ERROR, "%s: %s", msg, strerror(code));
     exit(0);
 }
 
 void dns_error(char *msg) /* dns-style error */
 {
-    fprintf(stderr, "%s: DNS error %d\n", msg, h_errno);
+    MITLogWrite(MITLOG_LEVEL_ERROR, "%s: DNS error %d", msg, h_errno);
     exit(0);
 }
 
 void app_error(char *msg) /* application error */
 {
-    fprintf(stderr, "%s\n", msg);
+    MITLogWrite(MITLOG_LEVEL_ERROR, "%s", msg);
     exit(0);
 }
 /* $end errorfuns */
