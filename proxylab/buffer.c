@@ -1,10 +1,14 @@
 #include "buffer.h"
+#include "network.h"
+#include "MITLogModule.h"
 
 #define BUFFER_HEAD(x) (x)->head
 #define BUFFER_TAIL(x) (x)->tail
 
+#include "MITLogModule.h"
+
 struct bufline_s {
-    unsigned char *string;  /* the actual string of data */
+    char *string;  /* the actual string of data */
     struct bufline_s *next; /* pointer to next in linked list */
     size_t length;          /* length of the string of data */
     size_t pos;             /* start sending from this offset */
@@ -16,7 +20,7 @@ struct buffer_s {
     size_t size;            /* total size of the buffer */
 };
 
-static struct bufline_s *makenewline (unsigned char *data, size_t length)
+static struct bufline_s *makenewline (char *data, size_t length)
 {
     struct bufline_s *newline;
 
@@ -27,7 +31,7 @@ static struct bufline_s *makenewline (unsigned char *data, size_t length)
     if (!newline)
         return NULL;
 
-    newline->string = (unsigned char *) Malloc (length);
+    newline->string = (char *) Malloc (length);
     if (!newline->string) {
         Free (newline);
         return NULL;
@@ -60,7 +64,7 @@ struct buffer_s *new_buffer (void)
 {
     struct buffer_s *buffptr;
 
-    buffptr = (struct buffer_s *) safemalloc (sizeof (struct buffer_s));
+    buffptr = (struct buffer_s *) Malloc (sizeof (struct buffer_s));
     if (!buffptr)
             return NULL;
     BUFFER_HEAD (buffptr) = BUFFER_TAIL (buffptr) = NULL;
@@ -89,7 +93,7 @@ size_t buffer_size (struct buffer_s *buffptr)
     return buffptr->size;
 }
 
-int add_to_buffer (struct buffer_s *buffptr, unsigned char *data, size_t length)
+int add_to_buffer (struct buffer_s *buffptr, char *data, size_t length)
 {
     struct bufline_s *newline;
 
@@ -111,23 +115,56 @@ int add_to_buffer (struct buffer_s *buffptr, unsigned char *data, size_t length)
     }
 
     buffptr->size += length;
-
     return 0;
 }
 
-static struct bufline_s *remove_from_buffer (struct buffer_s *buffptr)
+int buffer_to_str(struct buffer_s* buffptr, char** str)
 {
-    struct bufline_s *line;
-
-    assert (buffptr != NULL);
-    assert (BUFFER_HEAD (buffptr) != NULL);
-
-    line = BUFFER_HEAD (buffptr);
-    BUFFER_HEAD (buffptr) = line->next;
-
-    buffptr->size -= line->length;
-
-    return line;
+    assert(buffptr != NULL);
+    struct bufline_s* ptr = BUFFER_HEAD(buffptr);
+    *str = (char*)Malloc(buffptr -> size);
+    while (ptr) {
+        strncat((*str), ptr -> string, ptr -> length);
+        ptr = ptr -> next;
+    }
+    return 0;
 }
 
+int buffer_from_str(struct buffer_s* buffptr, char* str)
+{
+    assert(buffptr != NULL);
+    assert(str != NULL);
 
+    char* temp;
+    char* p = str;
+    ssize_t len = 0;
+    while(p < str + strlen(str)){
+        temp = strstr(p, "\n");
+        if(temp == NULL) break;
+        len = temp - p + 1;
+        char* line = (char*)Malloc(len);
+        memcpy(line, p, len);
+        add_to_buffer(buffptr, line, len);
+        p = temp + 1;
+    }
+    return 0;
+}
+
+int write_buffer(struct buffer_s* buffptr, int fd)
+{
+    assert(buffptr != NULL);
+    struct bufline_s* line = buffptr -> head;
+    while(line != NULL){
+        if(safe_write(fd, line -> string, line -> length) < 0){
+            MITLogWrite(MITLOG_LEVEL_ERROR, "write buffer error!");
+            return -1;
+        }
+        line = line -> next;
+    }
+    return 0;
+}
+
+int read_buffer(struct buffer_s* buffptr, int fd)
+{
+   return 0; 
+}

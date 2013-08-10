@@ -71,8 +71,8 @@ static int read_request_line (struct conn_s *connptr)
         }
         Free(connptr -> request_line);
     }
-    MITLogWrite(MITLOG_LEVEL_COMMON, "Request (file descriptor %d): %s",
-                connptr->client_fd, connptr->request_line);
+    //MITLogWrite(MITLOG_LEVEL_COMMON, "Request (file descriptor %d): %s",
+    //            connptr->client_fd, connptr->request_line);
     return 0;
 }
 
@@ -223,32 +223,32 @@ static struct request_s *process_request (struct conn_s *connptr)
     }
 
     if (!url) {
-        MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Null URL on file descriptor %d",
-                connptr->client_fd);
+        //MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Null URL on file descriptor %d",
+        //        connptr->client_fd);
         goto fail;
     }
 
     if (strncasecmp (url, "http://", 7) == 0){
         char *skipped_type = strstr (url, "//") + 2;
         if (extract_http_url (skipped_type, request) < 0) {
-            MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Could not parse url %s on file descriptor %d",
-                    url, connptr->client_fd);
+            //MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Could not parse url %s on file descriptor %d",
+            //        url, connptr->client_fd);
             goto fail;
         }
         connptr -> connect_method = 0;
     } else if (strcmp (request->method, "CONNECT") == 0) {
         if (extract_ssl_url (url, request) < 0) {
-            MITLogWrite(MITLOG_LEVEL_ERROR,  "process_request: Could not parse url %s on file descriptor %d",
-                    url, connptr->client_fd);
+            //MITLogWrite(MITLOG_LEVEL_ERROR,  "process_request: Could not parse url %s on file descriptor %d",
+            //        url, connptr->client_fd);
             goto fail;            
         }
         connptr -> connect_method = 1;
     }
 
-    Free(url);
+    //Free(url);
     return request;
 fail:
-    Free(url);
+    //Free(url);
     free_request_struct(request);
     return NULL;
 }
@@ -343,17 +343,12 @@ static int pull_client_data (struct conn_s *connptr, long int length)
     do{
         len = safe_read(connptr->client_fd, buffer,
                         min(MAXBUFFSIZE, (unsigned long int)length));
-        if(len < 0){
+        if(len <= 0){
             Free(buffer);
             return -1;
         }
-
-        if(len == 0) return 0;
-
-        if(safe_write(connptr -> server_fd, buffer, len) < 0){
-            Free(buffer);
-            return -1;
-        }
+        add_to_buffer(connptr -> cbuffer, buffer, len);
+        length -= len;
     }while(length > 0);
 
     socket_nonblocking (connptr->client_fd);
@@ -378,19 +373,28 @@ static int pull_client_data (struct conn_s *connptr, long int length)
 }
 
 static int
-process_client_headers (struct conn_s *connptr, hashmap_t hashofheaders)
+process_client_headers (struct conn_s *connptr, hashmap_t hashofheaders,
+                        struct request_s* request)
 {
-    static const char* skipheaders[] = {"Connection", "Host", "Proxy-Connection",
+    static const char* skipheaders[] = {"Connection", "Proxy-Connection",
                                         "Accept", "Accept-Encoding", "User-Agent"};
     int i;
     hashmap_iter iter;
-    int ret = 0;
     char *data, *header;
+    size_t size;
+    char* buffer_line = NULL;
 
-    if(connptr->server_fd == -1 || connptr -> connect_method){
-        MITLogWrite(MITLOG_LEVEL_COMMON, "Not sending client headers to remote machine");
-        return 0;
-    }
+    size = strlen(request -> method) + strlen(request -> path) + 13;
+    buffer_line = (char*)Malloc(size);
+    snprintf(buffer_line, size, "%s %s HTTP/1.0\r\n", request -> method, request -> path);
+    add_to_buffer(connptr -> cbuffer, buffer_line, size - 1);
+
+    add_to_buffer(connptr -> cbuffer, "Connection: close\r\n", 19);
+    add_to_buffer(connptr -> cbuffer, "Proxy-Connection: close\r\n", 25);
+    add_to_buffer(connptr -> cbuffer, "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n", 86);
+    add_to_buffer(connptr -> cbuffer, "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n", 73);
+    add_to_buffer(connptr -> cbuffer, "Accept-Encoding: gzip, deflate\r\n", 32);
+
 
     connptr->content_length.client = get_content_length (hashofheaders);
     for (i = 0; i != (sizeof (skipheaders) / sizeof (char *)); i++) {
@@ -402,28 +406,20 @@ process_client_headers (struct conn_s *connptr, hashmap_t hashofheaders)
         for (; !hashmap_is_end (hashofheaders, iter); ++iter) {
             hashmap_return_entry (hashofheaders,
                                   iter, &data, (void **) &header);
-            ret = write_message (connptr->server_fd,
-                                 "%s: %s\r\n", data, header);
+            size = strlen(data) + strlen(header) + 5;
+            buffer_line = (char*)Malloc(sizeof(char) * size);
+            snprintf(buffer_line, size, "%s: %s\r\n", data, header);
+            add_to_buffer(connptr -> cbuffer, buffer_line, size - 1);
         }
     }
 
-    if (safe_write (connptr->server_fd, "\r\n", 2) < 0)
-        return -1;
+    add_to_buffer(connptr -> cbuffer, "\r\n", 2);
     if (connptr->content_length.client > 0) {
-        ret = pull_client_data (connptr,connptr->content_length.client);
+        return pull_client_data (connptr,connptr->content_length.client);
     }
 
-    return ret;
+    return 0;
 }
-
-static int send_ssl_response (struct conn_s *connptr)
-{
-    return write_message (connptr->client_fd,
-                          "HTTP/1.0 200 Connection established\r\n"
-                          "Proxy-agent: ProxyLab/1.0\r\n"
-                          "\r\n");
-}
-
 
 int getsock_ip (int fd, char *ipaddr)
 {
@@ -445,58 +441,20 @@ int getsock_ip (int fd, char *ipaddr)
     return 0;
 }
 
-static int
-establish_http_connection (struct conn_s *connptr, struct request_s *request)
-{
-    char portbuff[7];
-    char dst[sizeof(struct in6_addr)];
-
-    if (request->port != HTTP_PORT && request->port != HTTP_PORT_SSL)
-        snprintf(portbuff, 7, ":%u", request->port);
-    else
-        portbuff[0] = '\0';
-    if (inet_pton(AF_INET6, request->host, dst) > 0) {
-        return write_message (connptr->server_fd,
-                              "%s %s HTTP/1.0\r\n"
-                              "Host: [%s]%s\r\n"
-                              "Connection: close\r\n"
-                              "Proxy-Connection: close\r\n"
-                              "Accept: %s\r\n"
-                              "Accept-Encoding: %s\r\n"
-                              "User-Agent: %s\r\n",
-                              request->method, request->path,
-                              request->host, portbuff,
-                              ACCEPT, ACCEPT_ENCODING, USER_AGENT);
-    } else {
-        return write_message (connptr->server_fd,
-                              "%s %s HTTP/1.0\r\n"
-                              "Host: %s%s\r\n"
-                              "Connection: close\r\n"                              
-                              "Proxy-Connection: close\r\n"
-                              "Accept: %s\r\n"
-                              "Accept-Encoding: %s\r\n"
-                              "User-Agent: %s\r\n",
-                              request->method, request->path,
-                              request->host, portbuff,
-                              ACCEPT, ACCEPT_ENCODING, USER_AGENT);
-
-    }
-}
-
 static int process_server_headers (struct conn_s *connptr)
 {
     char *response_line;
     hashmap_t hashofheaders;
     hashmap_iter iter;
-    char *data, *header;
-    ssize_t len;
+    char *line, *data, *header;
+    ssize_t len, size;
     int ret;
 
     while(1){
         len = readline (connptr->server_fd, &response_line);
         if(len < 0) return -1;
         if(len == 0){
-            write_message(connptr -> client_fd, "\r\n");
+            add_to_buffer(connptr -> sbuffer, "\r\n", 2);
             return 0;
         }
         
@@ -518,8 +476,10 @@ static int process_server_headers (struct conn_s *connptr)
                 return -4;
             }
 
-            ret = write_message (connptr->client_fd, "%s\r\n", response_line);
-            Free(response_line);
+            line = (char*)Malloc(strlen(response_line) + 3);
+            snprintf(line, strlen(response_line) + 3, "%s\r\n", response_line);
+            add_to_buffer(connptr -> sbuffer, line, strlen(response_line) + 2);
+
             if(ret < 0){
                 hashmap_delete(hashofheaders);
                 return -5;
@@ -533,8 +493,11 @@ static int process_server_headers (struct conn_s *connptr)
                 for (; !hashmap_is_end (hashofheaders, iter); ++iter) {
                     hashmap_return_entry (hashofheaders,
                                           iter, &data, (void **) &header);
-                    ret = write_message (connptr->client_fd,
-                                         "%s: %s\r\n", data, header);
+                    size = strlen(data) + strlen(header) + 5;
+                    line = (char*)Malloc(sizeof(char) * size);
+                    snprintf(line, size, "%s: %s\r\n", data, header);
+                    add_to_buffer(connptr -> sbuffer, line, size - 1);
+
                     if(ret < 0){
                         hashmap_delete(hashofheaders);
                         return -6;
@@ -543,8 +506,7 @@ static int process_server_headers (struct conn_s *connptr)
             }
             hashmap_delete (hashofheaders);
 
-            if (safe_write (connptr->client_fd, "\r\n", 2) < 0)
-                return -7;
+            add_to_buffer(connptr -> sbuffer, "\r\n", 2);
             return 0;
         }
 
@@ -553,15 +515,15 @@ static int process_server_headers (struct conn_s *connptr)
     return -8;
 }
 
-static int pull_server_data(struct conn_s *connptr, long int length)
+static int pull_server_data(struct conn_s *connptr)
 {
     char *buffer;
     ssize_t len;
-    buffer = (char *)Malloc(min(MAXBUFFSIZE, (unsigned long int)length));
+    ssize_t length = MAXBUFFSIZE;
+    buffer = (char *)Malloc(length);
     if(!buffer) return -1;
-    do{
-        len = safe_read(connptr->server_fd, buffer,
-                        min(MAXBUFFSIZE, (unsigned long int)length));
+    while(1){
+        len = safe_read(connptr->server_fd, buffer, length);
         if(len < 0){
             Free(buffer);
             return -1;
@@ -571,14 +533,63 @@ static int pull_server_data(struct conn_s *connptr, long int length)
             Free(buffer);
             return 0;
         }
+        add_to_buffer(connptr -> sbuffer, buffer, len);
+    }
+    return 0;
+}
 
-        if(safe_write(connptr -> client_fd, buffer, len) < 0){
-            Free(buffer);
-            return -1;
+static int send_client_request(struct conn_s *connptr, struct request_s *request)
+{
+    char* key = NULL;
+    buffer_to_str(connptr -> cbuffer, &key);
+    char* value = NULL;
+    
+    cache_query(CACHE, key, (void **)&value);
+    if(value == NULL){
+        MITLogWrite(MITLOG_LEVEL_COMMON, "cache miss for (%d:%d)",
+                    connptr -> client_fd, connptr -> server_fd);
+
+        connptr -> server_fd = Open_clientfd(request -> host, request -> port);
+        if(connptr -> server_fd < 0){
+            MITLogWrite(MITLOG_LEVEL_ERROR, "open server socket error!");
+            goto fail;
         }
-    }while(length > 0);
+       
+        MITLogWrite(MITLOG_LEVEL_COMMON, "Established connection to host \"%s\" using "
+           "file descriptor %d.", request->host,
+           connptr -> server_fd);
+        
+        if(write_buffer(connptr -> cbuffer, connptr -> server_fd) < 0)
+            goto fail;
+
+        if(process_server_headers(connptr) < 0){
+            MITLogWrite(MITLOG_LEVEL_ERROR, "process_server_headers error");
+            goto fail;
+        }
+
+        if(pull_server_data(connptr) < 0){
+            MITLogWrite(MITLOG_LEVEL_ERROR, "pull_server_data error");
+            goto fail;
+        }
+        buffer_to_str(connptr -> sbuffer, &value);
+        cache_update(CACHE, key, value, strlen(value));
+
+    } else {
+        MITLogWrite(MITLOG_LEVEL_COMMON, "cache hit for (%d:%d)",
+                    connptr -> client_fd, connptr -> server_fd);
+        buffer_from_str(connptr -> sbuffer, value);
+    }
+
+
+    if(write_buffer(connptr -> sbuffer, connptr -> client_fd) < 0)
+        goto fail;
 
     return 0;
+
+fail:        
+    if(key)Free(key);
+    if(value)Free(value);
+    return -1;
 }
 
 void handle_connection(int fd)
@@ -638,56 +649,26 @@ void handle_connection(int fd)
         hashmap_delete(hashofheaders);
         return;
     }
-
-    connptr -> server_fd = Open_clientfd(request -> host, request -> port);
-    if(connptr -> server_fd < 0){
-        MITLogWrite(MITLOG_LEVEL_ERROR, "open server socket error");
-        free_request_struct(request);
-        destroy_conn(connptr);
-        hashmap_delete(hashofheaders);
-        return;
-    }
-
-    MITLogWrite(MITLOG_LEVEL_COMMON, "Established connection to host \"%s\" using "
-           "file descriptor %d.", request->host,
-           connptr -> server_fd);
-
-    if (!connptr->connect_method)
-        establish_http_connection (connptr, request);
-
-    if (process_client_headers (connptr, hashofheaders) < 0) {
-        MITLogWrite(MITLOG_LEVEL_ERROR, "process client headers error");
+ 
+    if (process_client_headers (connptr, hashofheaders, request) < 0) {
+        MITLogWrite(MITLOG_LEVEL_ERROR, "process_client_headers error");
         free_request_struct(request);
         destroy_conn(connptr);
         hashmap_delete(hashofheaders);
         return;     
     }
 
-    if(!connptr -> connect_method){
-        int ret;
-        if((ret = process_server_headers(connptr)) < 0){
-            MITLogWrite(MITLOG_LEVEL_ERROR, "process server headers error: %d", ret);
-            free_request_struct(request);
-            destroy_conn(connptr);
-            hashmap_delete(hashofheaders);
-            return;             
-        }
-    } else {
-        if (send_ssl_response (connptr) < 0) {
-            MITLogWrite(MITLOG_LEVEL_ERROR, "send ssl response error");
-            free_request_struct(request);
-            destroy_conn(connptr);
-            hashmap_delete(hashofheaders);
-            return;              
-        }
-    }
 
-    pull_server_data(connptr, MAXBUFFSIZE);
+    if(send_client_request(connptr, request) < 0){
+        free_request_struct(request);
+        destroy_conn(connptr);
+        hashmap_delete(hashofheaders);
+        return;
+    }
 
     MITLogWrite(MITLOG_LEVEL_COMMON, "Closed connection between local client (fd:%d) "
            "and remote client (fd:%d)",
            connptr->client_fd, connptr->server_fd);
-
     free_request_struct (request);
     hashmap_delete (hashofheaders);
     destroy_conn (connptr);

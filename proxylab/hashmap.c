@@ -361,6 +361,7 @@ ssize_t hashmap_remove_lru(struct hashmap_s *map)
     unsigned int i;
     struct hashentry_s *ptr, *min_ptr, *next;
     long min_time = -1;
+    long min_count = -1;
     unsigned int min_hash;
 
     if (!map)
@@ -372,8 +373,15 @@ ssize_t hashmap_remove_lru(struct hashmap_s *map)
         while (ptr) {
             if(min_time < 0 || ptr -> timestamp < min_time){
                 min_time = ptr -> timestamp;
+                min_count = ptr -> count;
                 min_hash = i;
                 min_ptr = ptr;
+            } else if (ptr -> timestamp == min_time){
+                if(min_count < ptr -> count ){
+                    min_count = ptr -> count;
+                    min_hash = i;
+                    min_ptr = ptr;
+                }
             }
             ptr = ptr->next;
         }
@@ -397,5 +405,6 @@ ssize_t hashmap_remove_lru(struct hashmap_s *map)
     Free (min_ptr->data);
     Free (min_ptr);
     
+    --map->end_iterator;
     return ret;
 }

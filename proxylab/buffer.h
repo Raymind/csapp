@@ -8,11 +8,12 @@ extern struct buffer_s *new_buffer (void);
 extern void delete_buffer (struct buffer_s *buffptr);
 extern size_t buffer_size (struct buffer_s *buffptr);
 
-extern int add_to_buffer (struct buffer_s *buffptr, unsigned char *data,
+extern int add_to_buffer (struct buffer_s *buffptr, char *data,
                           size_t length);
+extern int buffer_to_str(struct buffer_s *buffptr, char** str);
+extern int buffer_from_str(struct buffer_s *buffptr, char* str);
 
-extern ssize_t read_buffer (int fd, struct buffer_s *buffptr);
-extern ssize_t write_buffer (int fd, struct buffer_s *buffptr);
-
+extern int write_buffer(struct buffer_s *buffptr, int fd);
+extern int read_buffer(struct buffer_s *buffptr, int fd);
 
 #endif

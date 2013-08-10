@@ -308,6 +308,7 @@ void *Calloc(size_t nmemb, size_t size)
 void Free(void *ptr) 
 {
     free(ptr);
+    *(&ptr) = NULL;
 }
 
 /******************************************
