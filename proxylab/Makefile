@@ -11,7 +11,7 @@ $(EXECUTABLE): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 
 submit:
-	(make clean; cd ..; tar cvf proxylab.tar proxylab-handout)
+	(make clean; cd ..; tar cvf proxylab.tar proxylab)
 
 clean:
 	rm -f *~ *.o proxy core

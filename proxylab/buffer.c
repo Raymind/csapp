@@ -120,13 +120,17 @@ int add_to_buffer (struct buffer_s *buffptr, char *data, size_t length)
 
 int buffer_to_str(struct buffer_s* buffptr, char** str)
 {
+    char* p;
     assert(buffptr != NULL);
     struct bufline_s* ptr = BUFFER_HEAD(buffptr);
-    *str = (char*)Malloc(buffptr -> size);
+    *str = (char*)Malloc(buffptr -> size + 1);
+    p = (*str);
     while (ptr) {
-        strncat((*str), ptr -> string, ptr -> length);
+        memcpy(p, ptr -> string, ptr -> length);
+        p = p + ptr -> length; 
         ptr = ptr -> next;
     }
+    (*p) = '\0';
     return 0;
 }
 
@@ -155,8 +159,9 @@ int write_buffer(struct buffer_s* buffptr, int fd)
     assert(buffptr != NULL);
     struct bufline_s* line = buffptr -> head;
     while(line != NULL){
+        //MITLogWrite(MITLOG_LEVEL_COMMON, "write buffer line: %s", line -> string);
         if(safe_write(fd, line -> string, line -> length) < 0){
-            MITLogWrite(MITLOG_LEVEL_ERROR, "write buffer error!");
+            //MITLogWrite(MITLOG_LEVEL_ERROR, "write buffer error!");
             return -1;
         }
         line = line -> next;

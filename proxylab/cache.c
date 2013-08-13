@@ -11,6 +11,8 @@ int cache_init(struct cache_s **cache)
     
     if((*cache) -> map == NULL)
         return -1;
+
+    (*cache) -> curr_size = 0;
     
     if(!pthread_rwlock_init(&((*cache) -> lock), NULL))
         return -1;
@@ -35,24 +37,24 @@ int cache_update(struct cache_s *cache,
     ssize_t size;
     
     if(len > MAX_OBJECT_SIZE){
-        MITLogWrite(MITLOG_LEVEL_WARNING,
-                    "object size (%d) exceeds the MAX_OBJECT_SIZE(%d)",
-                    len, MAX_OBJECT_SIZE);
+        //MITLogWrite(MITLOG_LEVEL_WARNING,
+        //            "object size (%d) exceeds the MAX_OBJECT_SIZE(%d)",
+        //            len, MAX_OBJECT_SIZE);
         pthread_rwlock_unlock(&cache -> lock);
         return 0;
     }
     
     if(len > MAX_CACHE_SIZE - cache -> curr_size){
-        MITLogWrite(MITLOG_LEVEL_WARNING,
-                    "Cache (size: %d) is almost full."
-                    "Should evict object for incoming object"
-                    "(size: %d)", cache -> curr_size, len);
+        //MITLogWrite(MITLOG_LEVEL_WARNING,
+        //            "Cache (size: %d) is almost full."
+        //            "Should evict object for incoming object"
+        //            "(size: %d)", cache -> curr_size, len);
         while(freed_size < len){
             if((size = hashmap_remove_lru(cache -> map)) < 0){
                 pthread_rwlock_unlock(&cache -> lock);
                 return -1;
             }
-            MITLogWrite(MITLOG_LEVEL_COMMON, "successfully evict %d bytes", size);
+            //MITLogWrite(MITLOG_LEVEL_COMMON, "successfully evict %d bytes", size);
             cache -> curr_size = cache -> curr_size - size;
             freed_size += size;
         }
@@ -64,8 +66,8 @@ int cache_update(struct cache_s *cache,
     }
     cache -> curr_size = cache -> curr_size + len;
 
-    MITLogWrite(MITLOG_LEVEL_COMMON, "New cache object added, current size: %d",
-                cache -> curr_size);
+    //MITLogWrite(MITLOG_LEVEL_COMMON, "New cache object added, current size: %d",
+    //            cache -> curr_size);
 
     pthread_rwlock_unlock(&cache -> lock);
     return 0;

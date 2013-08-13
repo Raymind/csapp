@@ -27,7 +27,7 @@ int child_make(struct child_s *ptr)
 {
     pthread_t thread;
     Pthread_create(&thread, NULL, child_main, (void *)ptr);
-    if(thread != NULL) return 0;
+    if(!thread) return 0;
     else return -1;
 }
 

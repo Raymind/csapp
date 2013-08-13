@@ -18,7 +18,7 @@ ssize_t safe_write (int fd, const char *buffer, size_t count)
     while (1) {
         len = send(fd, buffer, bytestosend, 0);
         if (len < 0) {
-            MITLogWrite(MITLOG_LEVEL_ERROR, "safe_write failed %d: %s", fd, strerror(errno));
+            //MITLogWrite(MITLOG_LEVEL_ERROR, "safe_write failed %d: %s", fd, strerror(errno));
             if (errno == EINTR)
                 continue;
             else
@@ -208,5 +208,49 @@ char *get_ip_string (struct sockaddr *sa, char *buf, size_t buflen)
     }
 
     return buf;
+}
+int opensock (const char *host, int port)
+{
+    int sockfd, n;
+    struct addrinfo hints, *res, *ressave;
+    char portstr[6];
+
+    assert (host != NULL);
+    assert (port > 0);
+
+    memset (&hints, 0, sizeof (struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    snprintf (portstr, sizeof (portstr), "%d", port);
+
+    n = getaddrinfo (host, portstr, &hints, &res);
+    if (n != 0) {
+        //MITLogWrite (MITLOG_LEVEL_ERROR,
+        //             "opensock: Could not retrieve info for %s", host);
+        return -1;
+    }
+
+    ressave = res;
+    do {
+        sockfd =
+            socket (res->ai_family, res->ai_socktype, res->ai_protocol);
+        if (sockfd < 0)
+            continue;
+        
+        if (connect (sockfd, res->ai_addr, res->ai_addrlen) == 0)
+            break;
+
+        close (sockfd);
+    } while ((res = res->ai_next) != NULL);
+    freeaddrinfo (ressave);
+    if (res == NULL) {
+        //MITLogWrite(MITLOG_LEVEL_ERROR,
+        //            "opensock: Could not establish a connection to %s",
+        //            host);
+        return -1;
+    }
+
+    return sockfd;
 }
 
