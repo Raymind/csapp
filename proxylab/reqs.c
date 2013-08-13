@@ -58,9 +58,9 @@ static int read_request_line (struct conn_s *connptr)
     while(1){
         len = readline(connptr->client_fd, &connptr->request_line);
         if(len < 0){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, 
-            //            "read_request_line: Client (file descriptor: %d) "
-            //            "closed socket before read.", connptr->client_fd);
+            MITLogWrite(MITLOG_LEVEL_ERROR, 
+                        "read_request_line: Client (file descriptor: %d) "
+                        "closed socket before read.", connptr->client_fd);
             return -1;
         }
 
@@ -71,7 +71,7 @@ static int read_request_line (struct conn_s *connptr)
         }
         Free(connptr -> request_line);
     }
-    ////MITLogWrite(MITLOG_LEVEL_COMMON, "Request (file descriptor %d): %s",
+    //MITLogWrite(MITLOG_LEVEL_COMMON, "Request (file descriptor %d): %s",
     //            connptr->client_fd, connptr->request_line);
     return 0;
 }
@@ -178,7 +178,7 @@ static int extract_ssl_url (const char *url, struct request_s *request)
     else if (sscanf(url, "%s", request->host) == 1)
         request->port = HTTP_PORT_SSL;
     else {
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "extract_ssl_url: Can't parse URL.");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "extract_ssl_url: Can't parse URL.");
         Free (request->host);
         return -1;
     }
@@ -212,34 +212,34 @@ static struct request_s *process_request (struct conn_s *connptr)
                       &connptr->protocol.major,
                       &connptr->protocol.minor);
         if(ret != 2){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Bad Request on file descriptor %d",
-            //        connptr->client_fd); 
+            MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Bad Request on file descriptor %d",
+                    connptr->client_fd); 
             goto fail;
         }
     } else {
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Bad Request on file descriptor %d",
-        //        connptr->client_fd); 
+        MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Bad Request on file descriptor %d",
+                connptr->client_fd); 
         goto fail;
     }
 
     if (!url) {
-        ////MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Null URL on file descriptor %d",
-        //        connptr->client_fd);
+        MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Null URL on file descriptor %d",
+                connptr->client_fd);
         goto fail;
     }
 
     if (strncasecmp (url, "http://", 7) == 0){
         char *skipped_type = strstr (url, "//") + 2;
         if (extract_http_url (skipped_type, request) < 0) {
-            ////MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Could not parse url %s on file descriptor %d",
-            //        url, connptr->client_fd);
+            MITLogWrite(MITLOG_LEVEL_ERROR, "process_request: Could not parse url %s on file descriptor %d",
+                    url, connptr->client_fd);
             goto fail;
         }
         connptr -> connect_method = 0;
     } else if (strcmp (request->method, "CONNECT") == 0) {
         if (extract_ssl_url (url, request) < 0) {
-            ////MITLogWrite(MITLOG_LEVEL_ERROR,  "process_request: Could not parse url %s on file descriptor %d",
-            //        url, connptr->client_fd);
+            MITLogWrite(MITLOG_LEVEL_ERROR,  "process_request: Could not parse url %s on file descriptor %d",
+                    url, connptr->client_fd);
             goto fail;            
         }
         connptr -> connect_method = 1;
@@ -364,7 +364,7 @@ static int pull_client_data (struct conn_s *connptr, long int length)
         ssize_t ret;
         ret = read (connptr->client_fd, buffer, 2);
         if (ret == -1) {
-            //MITLogWrite(MITLOG_LEVEL_COMMON, "Could not read two bytes from POST message");
+            MITLogWrite(MITLOG_LEVEL_ERROR, "Could not read two bytes from POST message");
         }
     }
 
@@ -376,18 +376,31 @@ static int
 process_client_headers (struct conn_s *connptr, hashmap_t hashofheaders,
                         struct request_s* request)
 {
-    static const char* skipheaders[] = {"Connection", "Proxy-Connection",
+    static const char* skipheaders[] = {"Host", "Connection", "Proxy-Connection",
                                         "Accept", "Accept-Encoding", "User-Agent"};
     int i;
     hashmap_iter iter;
     char *data, *header;
     size_t size;
     char* buffer_line = NULL;
+    char portbuff[7];
+
+    if (request->port != HTTP_PORT && request->port != HTTP_PORT_SSL)
+        snprintf (portbuff, 7, ":%u", request->port);
+    else
+        portbuff[0] = '\0';
+    
 
     size = strlen(request -> method) + strlen(request -> path) + 13;
     buffer_line = (char*)Malloc(size);
     snprintf(buffer_line, size, "%s %s HTTP/1.0\r\n", request -> method, request -> path);
-    add_to_buffer(connptr -> cbuffer, buffer_line, size - 1);
+    add_to_buffer_primary(connptr -> cbuffer, buffer_line, size - 1, 1);
+    Free(buffer_line);
+
+    size = strlen(request -> host) + strlen(portbuff) + 9;
+    buffer_line = (char*)Malloc(size);
+    snprintf(buffer_line, size, "Host: %s%s\r\n", request -> host, portbuff);
+    add_to_buffer_primary(connptr -> cbuffer, buffer_line, size - 1, 1);
     Free(buffer_line);
 
     add_to_buffer(connptr -> cbuffer, "Connection: close\r\n", 19);
@@ -431,8 +444,8 @@ int getsock_ip (int fd, char *ipaddr)
     assert (fd >= 0);
 
     if (getsockname (fd, (struct sockaddr *) &name, &namelen) != 0) {
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "getsock_ip: getsockname() error: %s",
-        //            strerror(errno));
+        MITLogWrite(MITLOG_LEVEL_ERROR, "getsock_ip: getsockname() error: %s",
+                    strerror(errno));
         return -1;
     }
 
@@ -467,7 +480,7 @@ static int process_server_headers (struct conn_s *connptr)
                 return -2;
             }
             if (get_all_headers (connptr->server_fd, hashofheaders) < 0) {
-                //MITLogWrite(MITLOG_LEVEL_COMMON, "Could not retrieve all the headers from the remote server.");
+                MITLogWrite(MITLOG_LEVEL_ERROR, "Could not retrieve all the headers from the remote server.");
                 hashmap_delete (hashofheaders);
                 Free(response_line);
                 return -3;
@@ -548,42 +561,40 @@ static int pull_server_data(struct conn_s *connptr)
 static int send_client_request(struct conn_s *connptr, struct request_s *request)
 {
     char* key = NULL;
-    buffer_to_str(connptr -> cbuffer, &key);
+    buffer_to_key(connptr -> cbuffer, &key);
     char* value = NULL;
     
     cache_query(CACHE, key, (void **)&value);
     if(value == NULL){
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "cache miss for (%d:%d)",
-        //            connptr -> client_fd, connptr -> server_fd);
-
         connptr -> server_fd = opensock(request -> host, request -> port);
         if(connptr -> server_fd < 0){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "open server socket error!");
+            MITLogWrite(MITLOG_LEVEL_ERROR, "open server socket error!");
             goto fail;
         }
        
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "Established connection to host \"%s\" using "
-        //   "file descriptor %d.", request->host,
-        //   connptr -> server_fd);
+        MITLogWrite(MITLOG_LEVEL_COMMON, "Cache miss for client fd %d. Established connection to host \"%s\" using "
+           "file descriptor %d.", connptr -> client_fd, request->host,
+           connptr -> server_fd);
         
         if(write_buffer(connptr -> cbuffer, connptr -> server_fd) < 0)
             goto fail;
 
         if(process_server_headers(connptr) < 0){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "process_server_headers error");
+            MITLogWrite(MITLOG_LEVEL_ERROR, "process_server_headers error");
             goto fail;
         }
 
         if(pull_server_data(connptr) < 0){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "pull_server_data error");
+            MITLogWrite(MITLOG_LEVEL_ERROR, "pull_server_data error");
             goto fail;
         }
         buffer_to_str(connptr -> sbuffer, &value);
         cache_update(CACHE, key, value, strlen(value));
+        Free(value);
 
     } else {
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "cache hit for (%d:%d)",
-        //            connptr -> client_fd, connptr -> server_fd);
+        MITLogWrite(MITLOG_LEVEL_COMMON, "cache hit for client fd %d, host \"%s\"",
+                    connptr -> client_fd, request -> host);
         buffer_from_str(connptr -> sbuffer, value);
     }
 
@@ -592,12 +603,10 @@ static int send_client_request(struct conn_s *connptr, struct request_s *request
         goto fail;
 
     Free(key);
-    Free(value);
     return 0;
 
 fail:        
     if(key)Free(key);
-    if(value)Free(value);
     return -1;
 }
 
@@ -624,13 +633,12 @@ void handle_connection(int fd)
     }
     
     if(read_request_line(connptr) < 0){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "failed to read request line");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "failed to read request line");
         destroy_conn(connptr);
         return;
     }
 
     if(connptr -> request_line == NULL){
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "empty request");
         destroy_conn(connptr);
         return;
     }
@@ -638,13 +646,13 @@ void handle_connection(int fd)
     request = process_request(connptr);
 
     if(!request){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "failed to process request");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "failed to process request");
         destroy_conn(connptr);
         return;
     }
 
     if(connptr -> connect_method){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "https not supported");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "https not supported");
         free_request_struct(request);
         destroy_conn(connptr);
         return;
@@ -652,7 +660,7 @@ void handle_connection(int fd)
 
     hashofheaders = hashmap_create (HEADER_BUCKETS);
     if(get_all_headers(connptr->client_fd, hashofheaders) < 0){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "failed to get all headers");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "failed to get all headers");
         free_request_struct(request);
         destroy_conn(connptr);
         hashmap_delete(hashofheaders);
@@ -660,7 +668,7 @@ void handle_connection(int fd)
     }
  
     if (process_client_headers (connptr, hashofheaders, request) < 0) {
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "process_client_headers error");
+        MITLogWrite(MITLOG_LEVEL_ERROR, "process_client_headers error");
         free_request_struct(request);
         destroy_conn(connptr);
         hashmap_delete(hashofheaders);

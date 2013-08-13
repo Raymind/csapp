@@ -12,6 +12,7 @@ struct bufline_s {
     struct bufline_s *next; /* pointer to next in linked list */
     size_t length;          /* length of the string of data */
     size_t pos;             /* start sending from this offset */
+    unsigned int primary;   /* whether used for cache key */
 };
 
 struct buffer_s {
@@ -20,7 +21,7 @@ struct buffer_s {
     size_t size;            /* total size of the buffer */
 };
 
-static struct bufline_s *makenewline (char *data, size_t length)
+static struct bufline_s *makenewline (char *data, size_t length, unsigned int pri)
 {
     struct bufline_s *newline;
 
@@ -41,6 +42,7 @@ static struct bufline_s *makenewline (char *data, size_t length)
 
     newline->next = NULL;
     newline->length = length;
+    newline->primary = pri;
 
     newline->pos = 0;
 
@@ -93,7 +95,14 @@ size_t buffer_size (struct buffer_s *buffptr)
     return buffptr->size;
 }
 
-int add_to_buffer (struct buffer_s *buffptr, char *data, size_t length)
+int add_to_buffer (struct buffer_s *buffptr, char *data, 
+                   size_t length)
+{
+    return add_to_buffer_primary(buffptr, data, length, 0);
+}
+
+int add_to_buffer_primary (struct buffer_s *buffptr, char *data, 
+                           size_t length, unsigned int primary)
 {
     struct bufline_s *newline;
 
@@ -104,7 +113,7 @@ int add_to_buffer (struct buffer_s *buffptr, char *data, size_t length)
         assert (buffptr->size == 0);
     else
         assert (buffptr->size > 0);
-    if (!(newline = makenewline (data, length)))
+    if (!(newline = makenewline (data, length, primary)))
         return -1;
 
     if (buffptr->size == 0)
@@ -128,6 +137,29 @@ int buffer_to_str(struct buffer_s* buffptr, char** str)
     while (ptr) {
         memcpy(p, ptr -> string, ptr -> length);
         p = p + ptr -> length; 
+        ptr = ptr -> next;
+    }
+    (*p) = '\0';
+    return 0;
+}
+
+int buffer_to_key(struct buffer_s* buffptr, char** str)
+{
+    char* p;
+    ssize_t size = 0;
+    struct bufline_s* ptr = BUFFER_HEAD(buffptr);
+    while(ptr){
+        if(ptr -> primary) size = size + ptr -> length;
+        ptr = ptr -> next;
+    }
+    *str = (char*)Malloc(size + 1);
+    p = (*str);
+    ptr = BUFFER_HEAD(buffptr);
+    while(ptr){
+        if(ptr -> primary){
+            memcpy(p, ptr -> string, ptr -> length);
+            p = p + ptr -> length; 
+        }
         ptr = ptr -> next;
     }
     (*p) = '\0';
@@ -159,9 +191,8 @@ int write_buffer(struct buffer_s* buffptr, int fd)
     assert(buffptr != NULL);
     struct bufline_s* line = buffptr -> head;
     while(line != NULL){
-        //MITLogWrite(MITLOG_LEVEL_COMMON, "write buffer line: %s", line -> string);
         if(safe_write(fd, line -> string, line -> length) < 0){
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "write buffer error!");
+            MITLogWrite(MITLOG_LEVEL_ERROR, "write buffer error!");
             return -1;
         }
         line = line -> next;

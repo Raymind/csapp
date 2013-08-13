@@ -18,7 +18,7 @@ ssize_t safe_write (int fd, const char *buffer, size_t count)
     while (1) {
         len = send(fd, buffer, bytestosend, 0);
         if (len < 0) {
-            //MITLogWrite(MITLOG_LEVEL_ERROR, "safe_write failed %d: %s", fd, strerror(errno));
+            MITLogWrite(MITLOG_LEVEL_ERROR, "safe_write failed %d: %s", fd, strerror(errno));
             if (errno == EINTR)
                 continue;
             else
@@ -226,8 +226,8 @@ int opensock (const char *host, int port)
 
     n = getaddrinfo (host, portstr, &hints, &res);
     if (n != 0) {
-        //MITLogWrite (MITLOG_LEVEL_ERROR,
-        //             "opensock: Could not retrieve info for %s", host);
+        MITLogWrite (MITLOG_LEVEL_ERROR,
+                     "opensock: Could not retrieve info for %s", host);
         return -1;
     }
 
@@ -245,9 +245,9 @@ int opensock (const char *host, int port)
     } while ((res = res->ai_next) != NULL);
     freeaddrinfo (ressave);
     if (res == NULL) {
-        //MITLogWrite(MITLOG_LEVEL_ERROR,
-        //            "opensock: Could not establish a connection to %s",
-        //            host);
+        MITLogWrite(MITLOG_LEVEL_ERROR,
+                    "opensock: Could not establish a connection to %s",
+                    host);
         return -1;
     }
 

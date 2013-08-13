@@ -66,8 +66,8 @@ int cache_update(struct cache_s *cache,
     }
     cache -> curr_size = cache -> curr_size + len;
 
-    //MITLogWrite(MITLOG_LEVEL_COMMON, "New cache object added, current size: %d",
-    //            cache -> curr_size);
+    MITLogWrite(MITLOG_LEVEL_COMMON, "New cache object added, current size: %d",
+                cache -> curr_size);
 
     pthread_rwlock_unlock(&cache -> lock);
     return 0;

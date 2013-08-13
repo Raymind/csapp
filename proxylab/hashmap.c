@@ -377,7 +377,7 @@ ssize_t hashmap_remove_lru(struct hashmap_s *map)
                 min_hash = i;
                 min_ptr = ptr;
             } else if (ptr -> timestamp == min_time){
-                if(min_count < ptr -> count ){
+                if(ptr -> count < min_count){
                     min_count = ptr -> count;
                     min_hash = i;
                     min_ptr = ptr;

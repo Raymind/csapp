@@ -57,28 +57,28 @@ int main(int argc, char* argv[])
     int port = process_cmdline(argc, argv);
    
     if (set_signal_handler (SIGPIPE, SIG_IGN) == SIG_ERR) {
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not set the \"SIGPIPE\" signal.",
-        //        argv[0]);
+        MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not set the \"SIGPIPE\" signal.",
+                argv[0]);
         exit(-1);
     }
 
     if(child_listening_sock(port) < 0){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not create listening socket.", argv[0]);
+        MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not create listening socket.", argv[0]);
         exit(-1);
     }
     
     if(child_pool_create() < 0){
-        //MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not create the pool of children.", argv[0]);
+        MITLogWrite(MITLOG_LEVEL_ERROR, "%s: Could not create the pool of children.", argv[0]);
         exit(-1);
     }
 
-    //MITLogWrite(MITLOG_LEVEL_COMMON, "Starting main loop. Accepting connections.");
+    MITLogWrite(MITLOG_LEVEL_COMMON, "Starting main loop. Accepting connections.");
 
     cache_init(&CACHE);
 
     child_main_loop ();
 
-    //MITLogWrite(MITLOG_LEVEL_COMMON, "Shutting down.");
+    MITLogWrite(MITLOG_LEVEL_COMMON, "Shutting down.");
 
     child_close_sock ();
 
